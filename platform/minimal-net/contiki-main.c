@@ -274,11 +274,8 @@ main(void)
     fd_set fds;
     int n;
     struct timeval tv;
-    
-    n = process_run();
-    /*    if(n > 0) {
-      printf("%d processes in queue\n");
-      }*/
+
+    process_run();
 
     tv.tv_sec = 0;
     tv.tv_usec = 1;

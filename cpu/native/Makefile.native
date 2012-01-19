@@ -16,6 +16,11 @@ CFLAGSNO = -Wall -g -I/usr/local/include $(CFLAGSWERROR)
 CFLAGS  += $(CFLAGSNO) -O
 LDFLAGS  = -Wl,-Map=contiki-$(TARGET).map,-export-dynamic
 
+ifeq ($(TAPDEV_USE_PCAP),1)
+CFLAGS  += -DTAPDEV_USE_PCAP=1
+LDFLAGS += -lpcap
+endif
+
 ### Compilation rules
 
 %.so: $(OBJECTDIR)/%.o

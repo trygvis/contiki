@@ -46,6 +46,10 @@
 #include <sys/uio.h>
 #include <sys/socket.h>
 
+#if TAPDEV_USE_PCAP == 1
+#include <pcap.h>
+#endif
+
 #ifdef linux
 #include <sys/ioctl.h>
 #include <linux/if.h>
@@ -64,11 +68,65 @@
 static int drop = 0;
 #endif
 
+#ifndef TAPDEV_IP
+#define TAPDEV_IP "10.1.1.100"
+#endif
+
+#ifndef TAPDEV_ADD_ROUTE
+#define TAPDEV_ADD_ROUTE 1
+#endif
+
 static int fd;
 
 static unsigned long lasttime;
 
 #define BUF ((struct uip_eth_hdr *)&uip_buf[0])
+
+#if TAPDEV_USE_PCAP == 1
+
+static pcap_dumper_t* pcap_dumper;
+static pcap_t* pcap;
+
+static void
+log_open() {
+
+  pcap = pcap_open_dead(DLT_EN10MB, 8 * 1024);
+  if(pcap == NULL) {
+    fprintf(stderr, "Could not initialize pcap: %s\n", pcap_geterr(pcap));
+    exit(EXIT_FAILURE);
+  }
+
+  pcap_dumper = pcap_dump_open(pcap, "pcap.out");
+  if(pcap_dumper == NULL) {
+    fprintf(stderr, "Could not open pcap dump file: %s\n", pcap_geterr(pcap));
+    exit(EXIT_FAILURE);
+  }
+}
+
+static void
+log_close() {
+  pcap_dump_close(pcap_dumper);
+  pcap_close(pcap);
+}
+
+static void
+log_packet(void* buf, int len)
+{
+  struct timeval ts;
+  gettimeofday(&ts, NULL);
+  struct pcap_pkthdr pkthdr;
+  pkthdr.ts = ts;
+  pkthdr.caplen = len;
+  pkthdr.len = len;
+
+  pcap_dump((u_char*)pcap_dumper, &pkthdr, buf);
+  pcap_dump_flush(pcap_dumper);
+}
+#else
+static void log_open() {}
+static void log_close() {}
+static void log_packet(void* buf, size_t len) {}
+#endif /* TAPDEV_USE_PCAP */
 
 /*---------------------------------------------------------------------------*/
 static void
@@ -104,9 +162,11 @@ tapdev_init(void)
   }
 #endif /* Linux */
 
-  snprintf(buf, sizeof(buf), "ifconfig tap0 inet 192.168.1.1");
+  snprintf(buf, sizeof(buf), "ifconfig tap0 inet " TAPDEV_IP);
   system(buf);
   printf("%s\n", buf);
+
+#if TAPDEV_ADD_ROUTE == 1
 #ifdef linux
   /* route add for linux */
   snprintf(buf, sizeof(buf), "route add -net 172.16.0.0/16 gw 192.168.1.2");
@@ -114,10 +174,13 @@ tapdev_init(void)
   /* route add for freebsd */
   snprintf(buf, sizeof(buf), "route add -net 172.16.0.0/16 192.168.1.2");
 #endif /* linux */
-  
+
   system(buf);
   printf("%s\n", buf);
   atexit(remove_route);
+#endif /* TAPDEV_ADD_ROUTE */
+
+  log_open();
 
   lasttime = 0;
 }
@@ -147,6 +210,11 @@ tapdev_poll(void)
   if(ret == -1) {
     perror("tapdev_poll: read");
   }
+
+  if(ret > 0) {
+    log_packet(uip_buf, ret);
+  }
+
   return ret;
 }
 /*---------------------------------------------------------------------------*/
@@ -170,6 +238,12 @@ tapdev_send(void)
   }
 #endif /* DROP */
 
+  if(uip_len == 0) {
+    return;
+  }
+
+  log_packet(uip_buf, uip_len);
+
   ret = write(fd, uip_buf, uip_len);
 
   if(ret == -1) {
@@ -181,5 +255,6 @@ tapdev_send(void)
 void
 tapdev_exit(void)
 {
+  log_close();
 }
 /*---------------------------------------------------------------------------*/
