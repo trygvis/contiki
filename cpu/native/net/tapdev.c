@@ -143,7 +143,8 @@ void
 tapdev_init(void)
 {
   char buf[1024];
-  
+  int set_ip = 1;
+
   fd = open(DEVTAP, O_RDWR);
   if(fd == -1) {
     perror("tapdev: tapdev_init: open");
@@ -154,6 +155,12 @@ tapdev_init(void)
   {
     struct ifreq ifr;
     memset(&ifr, 0, sizeof(ifr));
+    char *dev = getenv("TAPDEV");
+    if(dev) {
+      strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+      /* If we're using an externally configured TAP interface, don't set the IP */
+      set_ip = 0;
+    }
     ifr.ifr_flags = IFF_TAP|IFF_NO_PI;
     if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
       perror(buf);
@@ -162,9 +169,11 @@ tapdev_init(void)
   }
 #endif /* Linux */
 
-  snprintf(buf, sizeof(buf), "ifconfig tap0 inet " TAPDEV_IP);
-  system(buf);
-  printf("%s\n", buf);
+  if(set_ip) {
+    snprintf(buf, sizeof(buf), "ifconfig tap0 inet " TAPDEV_IP);
+    system(buf);
+    printf("%s\n", buf);
+  }
 
 #if TAPDEV_ADD_ROUTE == 1
 #ifdef linux

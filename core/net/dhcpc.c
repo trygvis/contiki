@@ -38,6 +38,10 @@
 #include "contiki-net.h"
 #include "net/dhcpc.h"
 
+#ifndef DHCPC_DEBUG
+#define DHCPC_DEBUG 0
+#endif
+
 #define STATE_INITIAL         0
 #define STATE_SENDING         1
 #define STATE_OFFER_RECEIVED  2
@@ -289,9 +293,9 @@ PT_THREAD(handle_dhcp(process_event_t ev, void *data))
     do {
       PT_YIELD(&s.pt);
       if(ev == tcpip_event && uip_newdata() && msg_for_me() == DHCPOFFER) {
-	parse_msg();
-	s.state = STATE_OFFER_RECEIVED;
-	goto selecting;
+        parse_msg();
+        s.state = STATE_OFFER_RECEIVED;
+        goto selecting;
       }
     } while (!etimer_expired(&s.etimer));
 
@@ -313,9 +317,9 @@ PT_THREAD(handle_dhcp(process_event_t ev, void *data))
     do {
       PT_YIELD(&s.pt);
       if(ev == tcpip_event && uip_newdata() && msg_for_me() == DHCPACK) {
-	parse_msg();
-	s.state = STATE_CONFIG_RECEIVED;
-	goto bound;
+        parse_msg();
+        s.state = STATE_CONFIG_RECEIVED;
+        goto bound;
       }
     } while (!etimer_expired(&s.etimer));
 
@@ -327,7 +331,7 @@ PT_THREAD(handle_dhcp(process_event_t ev, void *data))
   } while(s.state != STATE_CONFIG_RECEIVED);
   
  bound:
-#if 0
+#if DHCPC_DEBUG
   printf("Got IP address %d.%d.%d.%d\n", uip_ipaddr_to_quad(&s.ipaddr));
   printf("Got netmask %d.%d.%d.%d\n",	 uip_ipaddr_to_quad(&s.netmask));
   printf("Got DNS server %d.%d.%d.%d\n", uip_ipaddr_to_quad(&s.dnsaddr));

@@ -38,6 +38,8 @@
 #include <sys/select.h>
 #include <unistd.h>
 #include <memory.h>
+#include <stdlib.h>
+#include <signal.h>
 
 #include "contiki.h"
 #include "contiki-net.h"
@@ -49,6 +51,7 @@
 #include "net/wpcap-drv.h"
 #else /* __CYGWIN__ */
 #include "net/tapdev-drv.h"
+#include "net/tapdev.h"
 #endif /* __CYGWIN__ */
 
 #ifdef __CYGWIN__
@@ -100,7 +103,7 @@ void sprint_ip6(uip_ip6addr_t addr);
     rpl_set_prefix(dag, &ipaddr, 64);
 
 	for (i=0;i<UIP_DS6_ADDR_NB;i++) {
-	  if (uip_ds6_if.addr_list[i].isused) {	  
+	  if (uip_ds6_if.addr_list[i].isused) {
 	    printf("IPV6 Address: ");sprint_ip6(uip_ds6_if.addr_list[i].ipaddr);printf("\n");
 	  }
 	}
@@ -191,6 +194,25 @@ main(void)
 #endif
 #endif
 
+  // Set the ethernet address in uIP based on the UIP_ETH environment variable.
+  struct uip_eth_addr eth_addr;
+
+  char* eth = getenv("UIP_ETH");
+  if(eth != NULL) {
+    unsigned int a, b, c, d, e, f;
+    int x = sscanf(eth, "%02x:%02x:%02x:%02x:%02x:%02x", &a, &b, &c, &d, &e, &f);
+    eth_addr.addr[0] = a;
+    eth_addr.addr[1] = b;
+    eth_addr.addr[2] = c;
+    eth_addr.addr[3] = d;
+    eth_addr.addr[4] = e;
+    eth_addr.addr[5] = f;
+    if(x == 6) {
+      printf("MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n", eth_addr.addr[0], eth_addr.addr[1], eth_addr.addr[2], eth_addr.addr[3], eth_addr.addr[4], eth_addr.addr[5]);
+      uip_setethaddr(eth_addr);
+    }
+  }
+
   process_init();
 /* procinit_init initializes RPL which sets a ctimer for the first DIS */
 /* We must start etimers and ctimers,before calling it */
@@ -209,8 +231,9 @@ main(void)
 
   /* Set default IP addresses if not specified */
 #if !UIP_CONF_IPV6
+  {
   uip_ipaddr_t addr;
-  
+
   uip_gethostaddr(&addr);
   if (addr.u8[0]==0) {
     uip_ipaddr(&addr, 10,1,1,1);
@@ -231,7 +254,7 @@ main(void)
     uip_setdraddr(&addr);
   }
   printf("Def. Router: %d.%d.%d.%d\n", uip_ipaddr_to_quad(&addr));
-
+  }
 #else /* UIP_CONF_IPV6 */
 
 #if !UIP_CONF_IPV6_RPL
@@ -257,7 +280,7 @@ main(void)
 #if !RPL_BORDER_ROUTER  //Border router process prints addresses later
 { uint8_t i;
   for (i=0;i<UIP_DS6_ADDR_NB;i++) {
-	if (uip_ds6_if.addr_list[i].isused) {	  
+	if (uip_ds6_if.addr_list[i].isused) {
 	  printf("IPV6 Addresss: ");sprint_ip6(uip_ds6_if.addr_list[i].ipaddr);printf("\n");
 	}
   }
@@ -272,7 +295,6 @@ main(void)
 
   while(1) {
     fd_set fds;
-    int n;
     struct timeval tv;
 
     process_run();
@@ -291,7 +313,7 @@ main(void)
     }
     etimer_request_poll();
   }
-  
+
   return 0;
 }
 /*---------------------------------------------------------------------------*/
